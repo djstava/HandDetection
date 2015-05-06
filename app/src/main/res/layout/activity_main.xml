@@ -5,8 +5,7 @@
     android:layout_height="match_parent" tools:context=".MainActivity">
 
     <org.opencv.android.JavaCameraView
-        android:id="@+id/HelloOpenCvView"
-        android:visibility="gone"
+        android:id="@+id/javaCameraView"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
