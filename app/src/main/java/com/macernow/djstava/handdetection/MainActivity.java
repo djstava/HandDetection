@@ -11,6 +11,8 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.SeekBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import org.opencv.android.BaseLoaderCallback;
@@ -46,8 +48,17 @@ public class MainActivity extends ActionBarActivity implements CameraBridgeViewB
     private Size SPECTRUM_SIZE;
     private Scalar CONTOUR_COLOR;
     private Scalar CONTOUR_COLOR_WHITE;
-    private CameraBridgeViewBase mOpenCvCameraView;
+    private CustomSufaceView mOpenCvCameraView;
     private boolean mIsColorSelected = false;
+
+    private List<android.hardware.Camera.Size> mResolutionList;
+
+    private SeekBar minTresholdSeekbar = null;
+    private SeekBar maxTresholdSeekbar = null;
+    private TextView minTresholdSeekbarText = null;
+    private TextView numberOfFingersText = null;
+
+    double iThreshold = 0;
 
     final Handler mHandler = new Handler();
     int numberOfFingers = 0;
@@ -65,8 +76,32 @@ public class MainActivity extends ActionBarActivity implements CameraBridgeViewB
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_main);
 
-        mOpenCvCameraView = (CameraBridgeViewBase)findViewById(R.id.javaCameraView);
+        mOpenCvCameraView = (CustomSufaceView) findViewById(R.id.main_surface_view);
         mOpenCvCameraView.setCvCameraViewListener(this);
+
+        minTresholdSeekbarText = (TextView) findViewById(R.id.textView3);
+
+
+        numberOfFingersText = (TextView) findViewById(R.id.numberOfFingers);
+
+        minTresholdSeekbar = (SeekBar)findViewById(R.id.seekBar1);
+        minTresholdSeekbar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            int progressChanged = 0;
+
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser){
+                progressChanged = progress;
+                minTresholdSeekbarText.setText(String.valueOf(progressChanged));
+            }
+
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // TODO Auto-generated method stub
+            }
+
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                minTresholdSeekbarText.setText(String.valueOf(progressChanged));
+            }
+        });
+        minTresholdSeekbar.setProgress(8700);
     }
 
     private BaseLoaderCallback baseLoaderCallback = new BaseLoaderCallback(this) {
@@ -118,17 +153,17 @@ public class MainActivity extends ActionBarActivity implements CameraBridgeViewB
         int x = (int)motionEvent.getX() - xOffset;
         int y = (int)motionEvent.getY() - yOffset;
 
-        Log.i(TAG, "Touch image coordinates: (" + x + ", " + y + ")");
+        Log.e(TAG, "Touch image coordinates: (" + x + ", " + y + ")");
 
         if ((x < 0) || (y < 0) || (x > cols) || (y > rows)) return false;
 
         Rect touchedRect = new Rect();
 
-        touchedRect.x = (x>4) ? x-4 : 0;
-        touchedRect.y = (y>4) ? y-4 : 0;
+        touchedRect.x = (x>5) ? x-5 : 0;
+        touchedRect.y = (y>5) ? y-5 : 0;
 
-        touchedRect.width = (x+4 < cols) ? x + 4 - touchedRect.x : cols - touchedRect.x;
-        touchedRect.height = (y+4 < rows) ? y + 4 - touchedRect.y : rows - touchedRect.y;
+        touchedRect.width = (x+5 < cols) ? x + 5 - touchedRect.x : cols - touchedRect.x;
+        touchedRect.height = (y+5 < rows) ? y + 5 - touchedRect.y : rows - touchedRect.y;
 
         Mat touchedRegionRgba = mRgba.submat(touchedRect);
 
@@ -143,7 +178,7 @@ public class MainActivity extends ActionBarActivity implements CameraBridgeViewB
 
         mBlobColorRgba = converScalarHsv2Rgba(mBlobColorHsv);
 
-        Log.i(TAG, "Touched rgba color: (" + mBlobColorRgba.val[0] + ", " + mBlobColorRgba.val[1] +
+        Log.e(TAG, "Touched rgba color: (" + mBlobColorRgba.val[0] + ", " + mBlobColorRgba.val[1] +
                 ", " + mBlobColorRgba.val[2] + ", " + mBlobColorRgba.val[3] + ")");
 
         mDetector.setHsvColor(mBlobColorHsv);
@@ -158,15 +193,14 @@ public class MainActivity extends ActionBarActivity implements CameraBridgeViewB
         return false; // don't need subsequent touch events
     }
 
-    //from h3ct0r old SDK
+    //from h3ct0r with old SDK
     //public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
     public Mat onCameraFrame(Mat mat) {
         Log.d(TAG,"==== djstava onCameraFrame mat===");
 
-        //mRgba = inputFrame.rgba();
-        //mGray = inputFrame.gray();
-
         mRgba = mat;
+
+        iThreshold = minTresholdSeekbar.getProgress();
 
         Imgproc.GaussianBlur(mRgba,mRgba,new Size(3,3),1,1);
 
@@ -176,6 +210,8 @@ public class MainActivity extends ActionBarActivity implements CameraBridgeViewB
 
         List<MatOfPoint> contours = mDetector.getContours();
         mDetector.process(mRgba);
+
+        Log.e(TAG, "Contours count: " + contours.size());
 
         if (contours.size() <= 0) {
             return mRgba;
@@ -237,11 +273,9 @@ public class MainActivity extends ActionBarActivity implements CameraBridgeViewB
         for (int j = 0; j < convexDefect.toList().size(); j = j+4) {
             Point farPoint = contours.get(boundPos).toList().get(convexDefect.toList().get(j+2));
             Integer depth = convexDefect.toList().get(j+3);
-            /*
             if(depth > iThreshold && farPoint.y < a){
                 listPoDefect.add(contours.get(boundPos).toList().get(convexDefect.toList().get(j+2)));
             }
-            */
             Log.d(TAG, "defects ["+j+"] " + convexDefect.toList().get(j+3));
         }
 
@@ -249,16 +283,18 @@ public class MainActivity extends ActionBarActivity implements CameraBridgeViewB
         e2.fromList(listPo);
         defectPoints.add(e2);
 
-        Log.d(TAG, "hull: " + hull.toList());
-        Log.d(TAG, "defects: " + convexDefect.toList());
+        //Log.d(TAG, "hull: " + hull.toList());
+        //Log.d(TAG, "defects: " + convexDefect.toList());
 
         Imgproc.drawContours(mRgba, hullPoints, -1, CONTOUR_COLOR, 3);
 
         int defectsTotal = (int) convexDefect.total();
-        Log.d(TAG, "Defect total " + defectsTotal);
+        //Log.d(TAG, "Defect total " + defectsTotal);
 
         this.numberOfFingers = listPoDefect.size();
         if(this.numberOfFingers > 5) this.numberOfFingers = 5;
+
+        Log.e(TAG,"==== djstava finger number: " + numberOfFingers);
 
         mHandler.post(mUpdateFingerCountResults);
 
@@ -295,6 +331,15 @@ public class MainActivity extends ActionBarActivity implements CameraBridgeViewB
         mGray = new Mat();
         mRgba = new Mat();
 
+        android.hardware.Camera.Size resolution = mOpenCvCameraView.getResolution();
+        String caption = "Resolution "+ Integer.valueOf(resolution.width).toString() + "x" + Integer.valueOf(resolution.height).toString();
+        Toast.makeText(this, caption, Toast.LENGTH_SHORT).show();
+
+        android.hardware.Camera.Parameters cParams = mOpenCvCameraView.getParameters();
+        cParams.setFocusMode(android.hardware.Camera.Parameters.FOCUS_MODE_INFINITY);
+        mOpenCvCameraView.setParameters(cParams);
+        Toast.makeText(this, "Focus mode : "+cParams.getFocusMode(), Toast.LENGTH_SHORT).show();
+
         mRgba = new Mat(height, width, CvType.CV_8UC4);
         mDetector = new ColorBlobDetector();
         mSpectrum = new Mat();
@@ -319,9 +364,7 @@ public class MainActivity extends ActionBarActivity implements CameraBridgeViewB
     }
 
     public void updateNumberOfFingers(){
-        String str = String.valueOf(numberOfFingers);
-        Toast.makeText(MainActivity.this,str,Toast.LENGTH_LONG).show();
-        //numberOfFingersText.setText(String.valueOf(this.numberOfFingers));
+        numberOfFingersText.setText(String.valueOf(this.numberOfFingers));
     }
 
     @Override
