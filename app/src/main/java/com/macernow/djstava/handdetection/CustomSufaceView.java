@@ -56,6 +56,14 @@ public class CustomSufaceView extends JavaCameraView {
         connectCamera(getWidth(), getHeight());
     }
 
+    //for test only
+    public void setResolution() {
+        disconnectCamera();
+        mMaxHeight = 600;
+        mMaxWidth = 800;
+        connectCamera(getWidth(),getHeight());
+    }
+
     public android.hardware.Camera.Size getResolution() {
         return mCamera.getParameters().getPreviewSize();
     }

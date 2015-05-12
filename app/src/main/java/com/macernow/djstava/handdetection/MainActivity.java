@@ -37,7 +37,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 
-public class MainActivity extends ActionBarActivity implements CameraBridgeViewBase.CvCameraViewListener,View.OnTouchListener {
+public class MainActivity extends ActionBarActivity implements CameraBridgeViewBase.CvCameraViewListener2,View.OnTouchListener {
     private static final String TAG = MainActivity.class.getSimpleName();
 
     private Mat mRgba,mGray;
@@ -193,20 +193,17 @@ public class MainActivity extends ActionBarActivity implements CameraBridgeViewB
         return false; // don't need subsequent touch events
     }
 
-    //from h3ct0r with old SDK
-    //public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
-    public Mat onCameraFrame(Mat mat) {
-        Log.d(TAG,"==== djstava onCameraFrame mat===");
-
-        mRgba = mat;
+    public Mat onCameraFrame(CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
+        mRgba = inputFrame.rgba();
+        mGray = inputFrame.gray();
 
         iThreshold = minTresholdSeekbar.getProgress();
 
-        Imgproc.GaussianBlur(mRgba,mRgba,new Size(3,3),1,1);
+        //Imgproc.blur(mRgba, mRgba, new Size(5,5));
+        Imgproc.GaussianBlur(mRgba, mRgba, new org.opencv.core.Size(3, 3), 1, 1);
+        //Imgproc.medianBlur(mRgba, mRgba, 3);
 
-        if (!mIsColorSelected) {
-            return mRgba;
-        }
+        if (!mIsColorSelected) return mRgba;
 
         List<MatOfPoint> contours = mDetector.getContours();
         mDetector.process(mRgba);
@@ -217,13 +214,13 @@ public class MainActivity extends ActionBarActivity implements CameraBridgeViewB
             return mRgba;
         }
 
-        RotatedRect rect = Imgproc.minAreaRect(new MatOfPoint2f(contours.get(0).toArray()));
+        RotatedRect rect = Imgproc.minAreaRect(new MatOfPoint2f(contours.get(0)	.toArray()));
 
         double boundWidth = rect.size.width;
         double boundHeight = rect.size.height;
         int boundPos = 0;
 
-        for (int i = 1; i < contours.size();i++) {
+        for (int i = 1; i < contours.size(); i++) {
             rect = Imgproc.minAreaRect(new MatOfPoint2f(contours.get(i).toArray()));
             if (rect.size.width * rect.size.height > boundWidth * boundHeight) {
                 boundWidth = rect.size.width;
@@ -233,14 +230,21 @@ public class MainActivity extends ActionBarActivity implements CameraBridgeViewB
         }
 
         Rect boundRect = Imgproc.boundingRect(new MatOfPoint(contours.get(boundPos).toArray()));
-        Core.rectangle(mRgba,boundRect.tl(),boundRect.br(),CONTOUR_COLOR_WHITE,2,8,0);
+        Core.rectangle( mRgba, boundRect.tl(), boundRect.br(), CONTOUR_COLOR_WHITE, 2, 8, 0 );
+
+        Log.e(TAG,
+                " Row start ["+
+                        (int) boundRect.tl().y + "] row end ["+
+                        (int) boundRect.br().y+"] Col start ["+
+                        (int) boundRect.tl().x+"] Col end ["+
+                        (int) boundRect.br().x+"]");
 
         int rectHeightThresh = 0;
         double a = boundRect.br().y - boundRect.tl().y;
         a = a * 0.7;
         a = boundRect.tl().y + a;
 
-        Log.d(TAG,
+        Log.e(TAG,
                 " A ["+a+"] br y - tl y = ["+(boundRect.br().y - boundRect.tl().y)+"]");
 
         //Core.rectangle( mRgba, boundRect.tl(), boundRect.br(), CONTOUR_COLOR, 2, 8, 0 );
@@ -276,25 +280,23 @@ public class MainActivity extends ActionBarActivity implements CameraBridgeViewB
             if(depth > iThreshold && farPoint.y < a){
                 listPoDefect.add(contours.get(boundPos).toList().get(convexDefect.toList().get(j+2)));
             }
-            Log.d(TAG, "defects ["+j+"] " + convexDefect.toList().get(j+3));
+            Log.e(TAG, "defects ["+j+"] " + convexDefect.toList().get(j+3));
         }
 
         MatOfPoint e2 = new MatOfPoint();
         e2.fromList(listPo);
         defectPoints.add(e2);
 
-        //Log.d(TAG, "hull: " + hull.toList());
-        //Log.d(TAG, "defects: " + convexDefect.toList());
+        Log.e(TAG, "hull: " + hull.toList());
+        Log.e(TAG, "defects: " + convexDefect.toList());
 
         Imgproc.drawContours(mRgba, hullPoints, -1, CONTOUR_COLOR, 3);
 
         int defectsTotal = (int) convexDefect.total();
-        //Log.d(TAG, "Defect total " + defectsTotal);
+        Log.e(TAG, "Defect total " + defectsTotal);
 
         this.numberOfFingers = listPoDefect.size();
         if(this.numberOfFingers > 5) this.numberOfFingers = 5;
-
-        Log.e(TAG,"==== djstava finger number: " + numberOfFingers);
 
         mHandler.post(mUpdateFingerCountResults);
 
@@ -305,34 +307,16 @@ public class MainActivity extends ActionBarActivity implements CameraBridgeViewB
         return mRgba;
     }
 
-    /*
-    public Mat onCameraFrame(Mat mat) {
-        mRgba = mat;
-
-        Log.d(TAG,"==== djstava onCameraFrame mat===");
-        if (mIsColorSelected) {
-            mDetector.process(mRgba);
-            List<MatOfPoint> contours = mDetector.getContours();
-            Log.e(TAG, "Contours count: " + contours.size());
-            Imgproc.drawContours(mRgba, contours, -1, CONTOUR_COLOR);
-
-            Mat colorLabel = mRgba.submat(4, 68, 4, 68);
-            colorLabel.setTo(mBlobColorRgba);
-
-            Mat spectrumLabel = mRgba.submat(4, 4 + mSpectrum.rows(), 70, 70 + mSpectrum.cols());
-            mSpectrum.copyTo(spectrumLabel);
-        }
-
-        return mRgba;
-    }
-    */
-
     public void onCameraViewStarted(int width,int height) {
         mGray = new Mat();
         mRgba = new Mat();
 
+        //for test only
+        mOpenCvCameraView.setResolution();
+
         android.hardware.Camera.Size resolution = mOpenCvCameraView.getResolution();
         String caption = "Resolution "+ Integer.valueOf(resolution.width).toString() + "x" + Integer.valueOf(resolution.height).toString();
+        Log.e(TAG,"======djstava caption " + caption);
         Toast.makeText(this, caption, Toast.LENGTH_SHORT).show();
 
         android.hardware.Camera.Parameters cParams = mOpenCvCameraView.getParameters();
